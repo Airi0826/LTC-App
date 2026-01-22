@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>長照服務試算網</title>
+    <style>
+        body { font-family: sans-serif; display: flex; height: 100vh; margin: 0; background-color: #f4f4f4; }
+        
+        .sidebar { width: ˋ50px; background: white; border-right: 1px solid #ddd; padding: 20px; overflow-y: auto; }
+        .quota-card { background: #eef6ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .service-selected { border-top: 1px solid #eee; padding-top: 10px; }
+
+        .main-content { flex: 1; padding: 20px; overflow-y: auto; }
+        .category-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .category-btn { padding: 10px 20px; border: none; border-radius: 20px; cursor: pointer; background: #ddd; }
+        .category-btn.active { background: #007bff; color: white; }
+
+        .service-item { background: white; padding: 15px; border: 1px solid #ddd; border-radius: 8px; }
+        .service-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); 
+            gap: 15px;
+            padding: 10px;
+        }
+
+        .service-item {
+            background-color: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        .card-controls button {
+            padding: 10px 15px;
+            font-size: 1rem;
+            margin: 0 5px;
+            touch-action: manipulation;
+        }
+
+        .clear_button {
+            background-color: #ff4d4f;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #category-main button {
+            padding: 18px 32px;
+            font-size: 1rem;
+            background-color: #f0f0f0;
+            border: 2px solid #ccc;
+            border-radius: 12px;
+            margin: 8px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        #category-main button.active {
+            background-color: #007bff;
+            color: white;
+            border-color: #0056b3;
+        }
+
+        #category-sub button {
+            padding: 10px 20px;
+            font-size: 1.1rem;
+            background-color: #ffffff;
+            border: 1.5px solid #007bff;
+            color: #007bff;
+            border-radius: 50px;
+            margin: 5px;
+            cursor: pointer;
+        }
+
+        #category-sub button.active {
+            background-color: #e7f1ff;
+            font-weight: bold;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+        select#level-select, 
+        select#area-select, 
+        .category-select,
+        .subcategory-select {
+            font-size: 1.2rem;
+            padding: 12px 20px;
+            border-radius: 8px;
+            border: 2px solid #007bff;
+            margin: 10px 0;
+            width: 100%;
+            max-width: 300px;
+            cursor: pointer;
+            background-color: white;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <h2>LTC app</h2>
+        <div class="quota-section">
+            <div class="controls">
+                <label for="level-select">失能等級：</label>
+                <select id="level-select" onchange="updateQuotaDisplay(); loadServices();">
+                    <option value="2" selected>第二級</option>
+                    <option value="3">第三級</option>
+                    <option value="4">第四級</option>
+                    <option value="5">第五級</option>
+                    <option value="6">第六級</option>
+                    <option value="7">第七級</option>
+                    <option value="8">第八級</option>
+                </select>
+
+                <br><label for="area-select">居住地區：</label>
+                <select id="area-select" onchange="updateQuotaDisplay()">
+                    <option value="1" selected>第一區</option>
+                    <option value="2">第二區</option>
+                    <option value="3">第三區</option>
+                    <option value="4">第四區</option>
+                </select>
+            </div>
+
+            <table id="quota-table">
+                <thead>
+                    <tr>
+                        <th>服務類別</th>
+                        <th>總額度</th>
+                        <th>已扣除</th>
+                        <th>餘額</th>
+                    </tr>
+                </thead>
+                <tbody id="quota-body">
+                    </tbody>
+            </table>
+        </div>
+
+
+        <div class="selected-list-section">
+            <div>
+                <h3>已選服務明細</h3>
+                <button onclick="resetAll()" class="clear_button">
+                    全部清空
+                </button>
+            </div>
+            <ul id="selected-items-ul">
+                <li>尚未選擇任何服務</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div id="category-main" class="tabs-row">
+            <button onclick="selectMain('B')">B 基本照顧服務</button>
+            <button onclick="selectMain('C')">C 專業照顧服務</button>
+            <button onclick="selectMain('D')">D 交通接送服務</button>
+            <button onclick="selectMain('E')">E 輔具服務</button>
+            <button onclick="selectMain('F')">F 無障礙修繕服務</button>
+            <button onclick="selectMain('G')">G 照顧者喘息服務</button>
+        </div>
+
+        <div id="category-sub" class="tabs-row"> 
+        </div>
+
+        <div id="service-container" class="service-grid">
+        </div>
+    </div>
+    <script>
+        let allServices = []
+        let allQuotas = [];
+        let currentClass = "B";
+        let selectedServices = {};
+
+        const subMenuMap = {
+            "B": ["B", "BA", "BB", "BC", "BD"],
+            "C": ["C", "CA", "CB", "CC", "CD"],
+            "D": ["D", "DA"],
+            "E": ["E", "EA", "EB", "EC", "ED", "EF", "EG", "EH"],
+            "F": ["F", "FA"],
+            "G": ["G", "GA"]
+        };
+
+        function initServiceData() {
+            fetch('service_list.json')
+                .then(response => response.json())
+                .then(data => {
+                    allServices = data;
+                    loadServices();
+                });
+        }
+
+        function selectMain(mainId) {
+            currentCategory = mainId;
+            changeClass(mainId);
+            renderSubMenu(mainId);
+        }
+
+        function renderSubMenu(mainId) {
+            const subContainer = document.getElementById('category-sub');
+            const subList = subMenuMap[mainId] || [];
+            subContainer.innerHTML = subList.map(subId => `
+                <button onclick="changeClass('${subId}')">${subId}</button>
+            `).join('');
+        }
+
+        function loadServices() {
+            if (allServices.length === 0) {
+                console.warn("警告：allServices 抽屜是空的！");
+                return;
+            }
+
+            const currentLevel = document.getElementById('level-select').value; // 4
+            const filtered = allServices.filter(item => {
+                const isCorrectClass = item.ID && item.ID.startsWith(currentClass);
+                const isLevelAllowed = (item.allow_level === "NO") || 
+                (item.allow_level && String(item.allow_level).includes(currentLevel));
+
+                return isCorrectClass && isLevelAllowed;
+            });
+            renderToPage(filtered);
+        }
+
+        function changeClass(newClass) {
+            currentClass = newClass;
+            loadServices();
+        }
+
+        function renderToPage(services) {
+            const container = document.getElementById('service-container');
+            container.innerHTML = "";
+            
+            if (services.length === 0) {
+                container.innerHTML = "<p>此分類目前無服務項目</p>";
+                return;
+            }
+
+            const level = document.getElementById('level-select').value;
+            const area = document.getElementById('area-select').value;
+            const currentQuotaData = allQuotas.find(item => item.level === level && item.area === area);
+
+            services.forEach(item => {
+                const currentQty = selectedServices[item.ID] || 0;
+                let displayPrice = item.unitPrice;
+
+                if (item.ID === 'DA01' && currentQuotaData) {
+                    displayPrice = currentQuotaData.Second_package; 
+                }
+                const activeStyle = currentQty > 0 ? 'style="color: blue; font-weight: bold;"' : '';
+                const card = document.createElement('div');
+                card.className = "service-item";
+                card.style.border = "1px solid #ccc";
+                card.style.margin = "10px";
+                card.style.padding = "10px";
+                card.style.borderRadius = "8px";
+                
+                card.innerHTML = `
+                    <div class="card-info">
+                        <strong>${item.ID}</strong>
+                        <div>${item.name}</div>
+                        <div class="price">$${displayPrice}</div>
+                    </div>
+                    <div class="card-controls">
+                        <button onclick="updateQty('${item.ID}', -1)">-</button>
+                        <span id="qty-${item.ID}" ${activeStyle}>${currentQty}</span> 
+                        <button onclick="updateQty('${item.ID}', 1)">+</button>
+                    </div>
+                `;
+
+                let timer;
+                const delay = 600;
+
+                const start = () => {
+                    timer = setTimeout(() => {
+                        alert(`服務說明 (${item.ID}):\n${item.explanation || "暫無說明"}`);
+                    }, delay);
+                };
+
+                const cancel = () => {
+                    clearTimeout(timer);
+                };
+
+                card.addEventListener('mousedown', start);
+                card.addEventListener('touchstart', start);
+                card.addEventListener('mouseup', cancel);
+                card.addEventListener('mouseleave', cancel);
+                card.addEventListener('touchend', cancel);
+                
+                container.appendChild(card);
+            });
+        }
+
+        function updateQuotaDisplay() {
+            const selectedLevel = document.getElementById('level-select').value;
+            const selectedArea = document.getElementById('area-select').value;
+            
+            const currentData = allQuotas.find(item => {
+                return String(item.level) === String(selectedLevel) && 
+                String(item.area) === String(selectedArea);
+            });
+
+            if (currentData) {
+                renderQuotaTable(currentData);
+            } else {
+                console.warn("找不到對應的等級與地區組合");
+            }
+            loadServices();
+            calculateTotalExpenses();
+        }
+
+        function loadQuotaData() {
+            fetch('quota_list.json')
+                .then(response => response.json())
+                .then(data => {
+                    allQuotas = data;
+                    updateQuotaDisplay(); 
+                })
+                .catch(err => console.error("讀取失敗:", err));
+        }
+
+        function renderQuotaTable(data) {
+            const tbody = document.getElementById('quota-body');
+            
+            const categories = [
+                { name: "一、照顧及專業服務", code: "First_package" },
+                { name: "二、交通接送服務", code: "Second_package" },
+                { name: "三、輔具及無障礙環境改善服務", code: "Third_package" },
+                { name: "四、家庭照顧者喘息服務", code: "Fourth_package" }
+            ];
+
+            tbody.innerHTML = categories.map(cat => {
+                const rawValue = data[cat.code] || 0;
+                const cleanValue = String(rawValue).replace(/,/g, "");
+                const total = parseInt(cleanValue, 10);
+                const used = 0; 
+                const balance = total - used;
+
+                return `
+                    <tr>
+                        <td>${cat.name}</td>
+                        <td style="text-align: right;">${total.toLocaleString()}</td>
+                        <td style="text-align: right; color: red;">${used.toLocaleString()}</td>
+                        <td style="text-align: right; color: blue;">${balance.toLocaleString()}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function updateQty(serviceId, change) {
+            if (!selectedServices[serviceId]) selectedServices[serviceId] = 0;
+            selectedServices[serviceId] += change;
+            if (selectedServices[serviceId] < 0) selectedServices[serviceId] = 0;
+
+            if (serviceId === 'DA01') {
+                if (selectedServices[serviceId] > 1) selectedServices[serviceId] = 1;
+            }
+
+            const qtySpan = document.getElementById(`qty-${serviceId}`);
+            if (qtySpan) {
+                const currentQty = selectedServices[serviceId];
+                qtySpan.innerText = currentQty;
+                if (currentQty > 0) {
+                    qtySpan.style.color = "blue";
+                    qtySpan.style.fontWeight = "bold";
+                } else {
+                    qtySpan.style.color = "";
+                    qtySpan.style.fontWeight = "";
+                }
+            }
+            calculateTotalExpenses();
+        }
+
+        function calculateTotalExpenses() {
+            let expenses = {
+                "First_package": 0,
+                "Second_package": 0,
+                "Third_package": 0,
+                "Fourth_package": 0
+            };
+
+            const level = document.getElementById('level-select').value;
+            const area = document.getElementById('area-select').value;
+            const currentQuotaData = allQuotas.find(item => item.level === level && item.area === area);
+
+            for (const [id, qty] of Object.entries(selectedServices)) {
+                if (qty <= 0) continue;
+                let price = 0;
+                if (id === 'DA01' && currentQuotaData) {
+                    price = parseInt(String(currentQuotaData.Second_package).replace(/,/g, ""), 10) || 0;
+                }
+                else {
+                    const service = allServices.find(s => s.ID === id);
+                    if (service) {
+                        price = parseInt(String(service.unitPrice).replace(/,/g, ""), 10) || 0;
+                    }
+                }
+                const subtotal = price * qty;
+                const prefix = id.substring(0, 1);
+
+                if (prefix === 'B' || prefix === 'C') {
+                    expenses["First_package"] += subtotal;
+                } else if (prefix === 'D') {
+                    expenses["Second_package"] += subtotal;
+                } else if (prefix === 'E' || prefix === 'F') {
+                    expenses["Third_package"] += subtotal;
+                } else if (prefix === 'G') {
+                    expenses["Fourth_package"] += subtotal;
+                }
+            }
+            updateQuotaTableWithExpenses(expenses);
+            renderSelectedList();
+        }
+
+        function updateQuotaTableWithExpenses(expenses) {
+            const level = document.getElementById('level-select').value;
+            const area = document.getElementById('area-select').value;
+            const currentData = allQuotas.find(item => item.level === level && item.area === area);
+
+            if (!currentData) return;
+
+            const categories = [
+                { name: "一、照顧及專業服務", code: "First_package" },
+                { name: "二、交通接送服務", code: "Second_package" },
+                { name: "三、輔具及無障礙環境改善服務", code: "Third_package" },
+                { name: "四、家庭照顧者喘息服務", code: "Fourth_package" }
+            ];
+
+            const tbody = document.getElementById('quota-body');
+            tbody.innerHTML = categories.map(cat => {
+                const total = parseInt(String(currentData[cat.code]).replace(/,/g, ""), 10) || 0;
+                const used = expenses[cat.code] || 0;
+                const balance = total - used;
+
+                return `
+                    <tr>
+                        <td>${cat.name}</td>
+                        <td style="text-align: right;">${total.toLocaleString()}</td>
+                        <td style="text-align: right; color: red;">${used.toLocaleString()}</td>
+                        <td style="text-align: right; color: ${balance < 0 ? 'orange' : 'blue'};">
+                            ${balance.toLocaleString()}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderSelectedList() {
+            const listContainer = document.getElementById('selected-items-ul');
+            const selectedEntries = Object.entries(selectedServices).filter(([id, qty]) => qty > 0);
+
+            if (selectedEntries.length === 0) {
+                listContainer.innerHTML = '<li style="color: #999;">尚未選擇任何服務</li>';
+                return;
+            }
+
+            const level = document.getElementById('level-select').value;
+            const area = document.getElementById('area-select').value;
+            const currentQuotaData = allQuotas.find(item => item.level === level && item.area === area);
+
+            listContainer.innerHTML = selectedEntries.map(([id, qty]) => {
+                const service = allServices.find(s => s.ID === id);
+                const name = service ? service.name : "未知項目";
+                let price = 0;
+                if (id === 'DA01' && currentQuotaData) {
+                    price = parseInt(String(currentQuotaData.Second_package).replace(/,/g, ""), 10) || 0;
+                } else if (service) {
+                    price = parseInt(String(service.unitPrice).replace(/,/g, ""), 10) || 0;
+                }
+                
+                const subtotal = price * qty;
+
+                return `
+                    <li style="margin-bottom: 8px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <strong>${id} ${name}</strong>
+                            <span style="color: blue; font-weight: bold;">x ${qty}</span>
+                        </div>
+                        <div style="font-size: 0.9em; color: #666; text-align: right;">
+                            小計：$${subtotal.toLocaleString()}
+                        </div>
+                    </li>
+                `;
+            }).join('');
+        }
+
+        function resetAll() {
+            if (confirm("確定要清空所有已選服務嗎？")) {
+                selectedServices = {};
+                loadServices();
+                calculateTotalExpenses();
+            }
+        }
+
+        initServiceData();
+        loadQuotaData();
+    </script>
+</body>
+</html>
