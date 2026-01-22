@@ -7,7 +7,7 @@
     <style>
         body { font-family: sans-serif; display: flex; height: 100vh; margin: 0; background-color: #f4f4f4; }
         
-        .sidebar { width: ˋ50px; background: white; border-right: 1px solid #ddd; padding: 20px; overflow-y: auto; }
+        .sidebar { width: 450px; background: white; border-right: 1px solid #ddd; padding: 20px; overflow-y: auto; }
         .quota-card { background: #eef6ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
         .service-selected { border-top: 1px solid #eee; padding-top: 10px; }
 
@@ -310,7 +310,7 @@
         }
 
         function loadQuotaData() {
-            fetch('quota_list.json')
+            fetch('Quota_list.json')
                 .then(response => response.json())
                 .then(data => {
                     allQuotas = data;
