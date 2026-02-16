@@ -1,0 +1,189 @@
+body {
+    font-family: sans-serif;
+    display: flex;
+    /* width: 100vh; */
+    height: 100vh; /* 填滿100%vh = Viewport Height */
+    margin: 0;
+    background-color: #f4f4f4;
+}
+
+.sidebar {
+    flex-basis: 35%;
+    background: white;
+    border-right: 1px solid #ddd;
+    padding: 0px 30px;
+    overflow-y: auto; /* 自動產生卷軸 */
+}
+
+.sidebar h2 {
+    margin: 30px 0px 15px;
+
+}
+
+.controls {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.controls #level {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.controls #area {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+
+.quota-table{
+    width: 100%;
+    padding: 20px 0px;
+}
+
+.quota-table th#num{
+    text-align: end;
+}
+
+.clear_button {
+    width: 90px;
+    height: 35px;
+    background-color: #ff4d4f;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.selected-list-section div{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* ------------------------------- */
+
+.main-content { /* 右邊整塊 */
+    flex-basis: 65%;
+    padding: 20px;
+    justify-content: space-around;
+    overflow-y: auto;
+}
+
+.service-grid { /* 服務項目外圈 */
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); 
+    gap: 15px;
+    padding: 10px;
+}
+
+.service-item { /* 服務項目 */
+    background-color: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    display: flex;
+    justify-content: space-between;
+}
+.card-controls-wrapper{
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+}
+.card-controls{
+    gap: 10px;
+    display: flex;
+    align-items: center;
+}
+
+.card-controls input {
+    width: 30px;
+    border: 1.5px solid #ccc;
+    border-radius: 12px;
+    text-align: center;
+    width: 40px;
+    font-size: 1rem;
+    outline: none;
+}
+
+.qty-input::-webkit-outer-spin-button,
+.qty-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+    display: none;
+}
+
+.card-controls button { /* 服務項目內按鈕 */
+    width: 30px;
+    height: 30px;
+    font-size: 1rem; /* 根字體的大小倍數 */
+    touch-action: manipulation; /* 對操作友善 */
+    cursor: pointer;
+}
+
+.card-controls button:active{ /* 點擊讓按鈕縮小 */
+    transform: scale(0.92);
+}
+
+.tabs-row {
+    display: grid;
+    grid-template-columns: auto auto auto;
+    justify-content: space-between;
+    /* align-content: center; */
+}
+
+#category-main button {
+    width: 40vh;
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 12px;
+    font-size: 1rem;
+    padding: 15px 30px;
+    margin: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+#category-main button:active {
+    transform: scale(0.98);
+    background-color: #e7e7e7;
+}
+
+#category-sub button {
+    background-color: #ffffff;
+    color: #007bff;
+    border: 0.5px solid #007bff;
+    border-radius: 12px;
+    font-size: 1rem;
+    padding: 10px;
+    margin: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+#category-sub button:active {
+    transform: scale(0.95);
+    background-color: #e7f1ff;
+}
+
+select#level-select, 
+select#area-select,
+.subcategory-select {
+    font-size: 1.2rem;
+    padding: 12px 20px;
+    border-radius: 8px;
+    border: 1px solid #007bff;
+    width: 100%;
+    max-width: 300px;
+    cursor: pointer;
+    background-color: white;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
