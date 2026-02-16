@@ -4,98 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>長照服務試算網</title>
-    <style>
-        body { font-family: sans-serif; display: flex; height: 100vh; margin: 0; background-color: #f4f4f4; }
-        
-        .sidebar { width: 450px; background: white; border-right: 1px solid #ddd; padding: 20px; overflow-y: auto; }
-        .quota-card { background: #eef6ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-        .service-selected { border-top: 1px solid #eee; padding-top: 10px; }
-
-        .main-content { flex: 1; padding: 20px; overflow-y: auto; }
-        .category-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
-        .category-btn { padding: 10px 20px; border: none; border-radius: 20px; cursor: pointer; background: #ddd; }
-        .category-btn.active { background: #007bff; color: white; }
-
-        .service-item { background: white; padding: 15px; border: 1px solid #ddd; border-radius: 8px; }
-        .service-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); 
-            gap: 15px;
-            padding: 10px;
-        }
-
-        .service-item {
-            background-color: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 12px;
-            padding: 15px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        }
-
-        .card-controls button {
-            padding: 10px 15px;
-            font-size: 1rem;
-            margin: 0 5px;
-            touch-action: manipulation;
-        }
-
-        .clear_button {
-            background-color: #ff4d4f;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        #category-main button {
-            padding: 18px 32px;
-            font-size: 1rem;
-            background-color: #f0f0f0;
-            border: 2px solid #ccc;
-            border-radius: 12px;
-            margin: 8px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        #category-main button.active {
-            background-color: #007bff;
-            color: white;
-            border-color: #0056b3;
-        }
-
-        #category-sub button {
-            padding: 10px 20px;
-            font-size: 1.1rem;
-            background-color: #ffffff;
-            border: 1.5px solid #007bff;
-            color: #007bff;
-            border-radius: 50px;
-            margin: 5px;
-            cursor: pointer;
-        }
-
-        #category-sub button.active {
-            background-color: #e7f1ff;
-            font-weight: bold;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
-        }
-        select#level-select, 
-        select#area-select, 
-        .category-select,
-        .subcategory-select {
-            font-size: 1.2rem;
-            padding: 12px 20px;
-            border-radius: 8px;
-            border: 2px solid #007bff;
-            margin: 10px 0;
-            width: 100%;
-            max-width: 300px;
-            cursor: pointer;
-            background-color: white;
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -103,33 +12,36 @@
         <h2>LTC app</h2>
         <div class="quota-section">
             <div class="controls">
-                <label for="level-select">失能等級：</label>
-                <select id="level-select" onchange="updateQuotaDisplay(); loadServices();">
-                    <option value="2" selected>第二級</option>
-                    <option value="3">第三級</option>
-                    <option value="4">第四級</option>
-                    <option value="5">第五級</option>
-                    <option value="6">第六級</option>
-                    <option value="7">第七級</option>
-                    <option value="8">第八級</option>
-                </select>
-
-                <br><label for="area-select">居住地區：</label>
-                <select id="area-select" onchange="updateQuotaDisplay()">
-                    <option value="1" selected>第一區</option>
-                    <option value="2">第二區</option>
-                    <option value="3">第三區</option>
-                    <option value="4">第四區</option>
-                </select>
+                <div id="level">
+                    <label for="level-select">失能等級：</label>
+                    <select id="level-select" onchange="updateQuotaDisplay(); loadServices();">
+                        <option value="2" selected>第二級</option>
+                        <option value="3">第三級</option>
+                        <option value="4">第四級</option>
+                        <option value="5">第五級</option>
+                        <option value="6">第六級</option>
+                        <option value="7">第七級</option>
+                        <option value="8">第八級</option>
+                    </select>
+                </div>
+                <div id="area">
+                    <label for="area-select">居住地區：</label>
+                    <select id="area-select" onchange="updateQuotaDisplay()">
+                        <option value="1" selected>第一區</option>
+                        <option value="2">第二區</option>
+                        <option value="3">第三區</option>
+                        <option value="4">第四區</option>
+                    </select>
+                </div>
             </div>
 
-            <table id="quota-table">
+            <table id="quota-table" class="quota-table">
                 <thead>
                     <tr>
                         <th>服務類別</th>
-                        <th>總額度</th>
-                        <th>已扣除</th>
-                        <th>餘額</th>
+                        <th id="num">總額度</th>
+                        <th id="num">已扣除</th>
+                        <th id="num">餘額</th>
                     </tr>
                 </thead>
                 <tbody id="quota-body">
@@ -151,7 +63,7 @@
         </div>
     </div>
 
-    <div class="main-content">
+    <div class="main-content"> <!--右邊整塊-->
         <div id="category-main" class="tabs-row">
             <button onclick="selectMain('B')">B 基本照顧服務</button>
             <button onclick="selectMain('C')">C 專業照顧服務</button>
@@ -161,7 +73,7 @@
             <button onclick="selectMain('G')">G 照顧者喘息服務</button>
         </div>
 
-        <div id="category-sub" class="tabs-row"> 
+        <div id="category-sub" class="tabs-sub-row"> 
         </div>
 
         <div id="service-container" class="service-grid">
@@ -250,10 +162,6 @@
                 const activeStyle = currentQty > 0 ? 'style="color: blue; font-weight: bold;"' : '';
                 const card = document.createElement('div');
                 card.className = "service-item";
-                card.style.border = "1px solid #ccc";
-                card.style.margin = "10px";
-                card.style.padding = "10px";
-                card.style.borderRadius = "8px";
                 
                 card.innerHTML = `
                     <div class="card-info">
@@ -261,10 +169,12 @@
                         <div>${item.name}</div>
                         <div class="price">$${displayPrice}</div>
                     </div>
-                    <div class="card-controls">
-                        <button onclick="updateQty('${item.ID}', -1)">-</button>
-                        <span id="qty-${item.ID}" ${activeStyle}>${currentQty}</span> 
-                        <button onclick="updateQty('${item.ID}', 1)">+</button>
+                    <div class="card-controls-wrapper">
+                        <div class="card-controls">
+                            <button onclick="updateQty('${item.ID}', -1)">-</button>
+                            <input id="qty-${item.ID}" type="number" value="${currentQty}" class="qty-input" min="0" onchange="handleInputChange('${item.ID}', this.value)" ${activeStyle}></input>
+                            <button onclick="updateQty('${item.ID}', 1)">+</button>
+                        </div>
                     </div>
                 `;
 
@@ -289,6 +199,30 @@
                 
                 container.appendChild(card);
             });
+        }
+        function handleInputChange(serviceId, newValue) {
+            let val = parseInt(newValue, 10);
+            if (isNaN(val) || val < 0) {
+                val = 0;
+            }
+            if (serviceId === 'DA01' && val > 1) {
+                val = 1;
+            }
+
+            selectedServices[serviceId] = val;
+            const inputEl = document.getElementById(`qty-${serviceId}`);
+            if (inputEl) {
+                inputEl.value = val;
+                
+                if (val > 0) {
+                    inputEl.style.color = "blue";
+                    inputEl.style.fontWeight = "bold";
+                } else {
+                    inputEl.style.color = "";
+                    inputEl.style.fontWeight = "";
+                }
+            }
+            calculateTotalExpenses();
         }
 
         function updateQuotaDisplay() {
@@ -359,7 +293,7 @@
             const qtySpan = document.getElementById(`qty-${serviceId}`);
             if (qtySpan) {
                 const currentQty = selectedServices[serviceId];
-                qtySpan.innerText = currentQty;
+                qtySpan.value = currentQty;
                 if (currentQty > 0) {
                     qtySpan.style.color = "blue";
                     qtySpan.style.fontWeight = "bold";
@@ -483,6 +417,7 @@
                 `;
             }).join('');
         }
+        
 
         function resetAll() {
             if (confirm("確定要清空所有已選服務嗎？")) {
