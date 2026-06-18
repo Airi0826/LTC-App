@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>長照服務試算網</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 
@@ -53,9 +55,19 @@
         <div class="selected-list-section">
             <div>
                 <h3>已選服務明細</h3>
-                <button onclick="resetAll()" class="clear_button">
-                    全部清空
-                </button>
+                <div class="selected-actions">
+                    <select id="export-format-select" class="export-format-select" aria-label="選擇輸出格式">
+                        <option value="pdf">PDF</option>
+                        <option value="jpg">JPG</option>
+                        <option value="txt">純文字</option>
+                    </select>
+                    <button onclick="exportSelectedSummary()" class="export_button">
+                        輸出
+                    </button>
+                    <button onclick="resetAll()" class="clear_button">
+                        全部清空
+                    </button>
+                </div>
             </div>
             <ul id="selected-items-ul">
                 <li>尚未選擇任何服務</li>
@@ -63,7 +75,35 @@
         </div>
     </div>
 
+    <div id="resizer" class="resizer"></div>
+
     <div class="main-content"> <!--右邊整塊-->
+        <div class="ai-section">
+            <h3>🤖 AI 長照顧問 (Beta)</h3>
+            <p>(1).請描述使用者的狀況（例如：無法獨自洗澡、爬樓梯），AI 將自動為您勾選建議項目。 (2).分析完成後會自動加入已選服務明細，若有變更或清除，可按再次引用。 (3).此功能仍在測試中，若出現無法分析的情況請再試一次。</p>
+            <div>
+                <input type="text" id="ai-input" placeholder="輸入需求或狀況描述...">
+                <button onclick="askAI()" id="ai-btn">開始分析</button>
+            </div>
+            
+            <div id="ai-progress-container" class="ai-progress-container">
+                <div id="ai-status-text" class="ai-status-text">🤖 AI 長照顧問已啟動...</div>
+                <div class="ai-progress-track">
+                    <div id="ai-progress-bar" class="ai-progress-bar"></div>
+                </div>
+                
+            </div>
+            <div id="ai-cache-zone" class="ai-cache-zone">
+                <p class="ai-cache-title">
+                    <strong>上一次輸入的需求：</strong> <span id="cache-input-text" class="ai-cache-text"></span>
+                </p>
+                
+                <div id="cache-result-text" class="ai-cache-result"></div>
+                <button id="ai-apply-btn" type="button" class="ai-apply-btn">
+                    再次引用
+                </button>
+            </div>
+        </div>
         <div id="category-main" class="tabs-row">
             <button onclick="selectMain('B')">B 基本照顧服務</button>
             <button onclick="selectMain('C')">C 專業照顧服務</button>
@@ -79,12 +119,17 @@
         <div id="service-container" class="service-grid">
         </div>
     </div>
+    <div id="export-preview" class="export-preview" aria-hidden="true"></div>
+    <script src="ai.js"></script>
+    <script src="resize.js"></script>
     <script>
         let allServices = []
         let allQuotas = [];
         let currentClass = "B";
         let selectedServices = {};
-
+        let servicesReady = false;
+        let quotasReady = false;
+        
         const subMenuMap = {
             "B": ["B", "BA", "BB", "BC", "BD"],
             "C": ["C", "CA", "CB", "CC", "CD"],
@@ -96,10 +141,23 @@
 
         function initServiceData() {
             fetch('service_list.json')
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`service_list.json 載入失敗：${response.status} ${response.statusText}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     allServices = data;
-                    loadServices();
+                    servicesReady = true;
+                    maybeRenderInitialView();
+                })
+                .catch(err => {
+                    console.error('讀取 service_list.json 失敗:', err);
+                    const container = document.getElementById('service-container');
+                    if (container) {
+                        container.innerHTML = '<p>服務資料載入失敗，請確認檔案路徑或用本機伺服器開啟。</p>';
+                    }
                 });
         }
 
@@ -151,6 +209,7 @@
             const level = document.getElementById('level-select').value;
             const area = document.getElementById('area-select').value;
             const currentQuotaData = allQuotas.find(item => item.level === level && item.area === area);
+            const summary = getSelectionExpenseSummary();
 
             services.forEach(item => {
                 const currentQty = selectedServices[item.ID] || 0;
@@ -159,9 +218,17 @@
                 if (item.ID === 'DA01' && currentQuotaData) {
                     displayPrice = currentQuotaData.Second_package; 
                 }
+                const numericPrice = parseMoneyValue(displayPrice);
+                const packageCode = getPackageCodeForServiceId(item.ID);
+                const remainingBudget = getPackageRemaining(currentQuotaData, packageCode, summary.expenses);
+                const budgetBlocked = numericPrice > remainingBudget;
                 const activeStyle = currentQty > 0 ? 'style="color: blue; font-weight: bold;"' : '';
                 const card = document.createElement('div');
                 card.className = "service-item";
+                if (currentQty === 0 && budgetBlocked) {
+                    card.style.opacity = "0.45";
+                    card.style.filter = "grayscale(1)";
+                }
                 
                 card.innerHTML = `
                     <div class="card-info">
@@ -171,9 +238,9 @@
                     </div>
                     <div class="card-controls-wrapper">
                         <div class="card-controls">
-                            <button onclick="updateQty('${item.ID}', -1)">-</button>
-                            <input id="qty-${item.ID}" type="number" value="${currentQty}" class="qty-input" min="0" onchange="handleInputChange('${item.ID}', this.value)" ${activeStyle}></input>
-                            <button onclick="updateQty('${item.ID}', 1)">+</button>
+                            <button onclick="updateQty('${item.ID}', -1)" ${currentQty === 0 ? 'disabled' : ''}>-</button>
+                            <input id="qty-${item.ID}" type="number" value="${currentQty}" class="qty-input" min="0" onchange="handleInputChange('${item.ID}', this.value)" ${activeStyle} ${currentQty === 0 && budgetBlocked ? 'disabled' : ''}></input>
+                            <button onclick="updateQty('${item.ID}', 1)" ${budgetBlocked ? 'disabled' : ''}>+</button>
                         </div>
                     </div>
                 `;
@@ -200,30 +267,6 @@
                 container.appendChild(card);
             });
         }
-        function handleInputChange(serviceId, newValue) {
-            let val = parseInt(newValue, 10);
-            if (isNaN(val) || val < 0) {
-                val = 0;
-            }
-            if (serviceId === 'DA01' && val > 1) {
-                val = 1;
-            }
-
-            selectedServices[serviceId] = val;
-            const inputEl = document.getElementById(`qty-${serviceId}`);
-            if (inputEl) {
-                inputEl.value = val;
-                
-                if (val > 0) {
-                    inputEl.style.color = "blue";
-                    inputEl.style.fontWeight = "bold";
-                } else {
-                    inputEl.style.color = "";
-                    inputEl.style.fontWeight = "";
-                }
-            }
-            calculateTotalExpenses();
-        }
 
         function updateQuotaDisplay() {
             const selectedLevel = document.getElementById('level-select').value;
@@ -248,9 +291,18 @@
                 .then(response => response.json())
                 .then(data => {
                     allQuotas = data;
-                    updateQuotaDisplay(); 
+                    quotasReady = true;
+                    maybeRenderInitialView(); 
                 })
                 .catch(err => console.error("讀取失敗:", err));
+        }
+
+        function maybeRenderInitialView() {
+            if (!servicesReady || !quotasReady) {
+                return;
+            }
+            updateQuotaDisplay();
+            renderSubMenu(currentClass);
         }
 
         function renderQuotaTable(data) {
@@ -281,57 +333,97 @@
             }).join('');
         }
 
-        function updateQty(serviceId, change) {
-            if (!selectedServices[serviceId]) selectedServices[serviceId] = 0;
-            selectedServices[serviceId] += change;
-            if (selectedServices[serviceId] < 0) selectedServices[serviceId] = 0;
+        function getCurrentQuotaData() {
+            const level = document.getElementById('level-select').value;
+            const area = document.getElementById('area-select').value;
+            const levelMapping = {
+                "2": "第二級", "3": "第三級", "4": "第四級",
+                "5": "第五級", "6": "第六級", "7": "第七級", "8": "第八級"
+            };
+            const areaMapping = {
+                "1": "第一區", "2": "第二區", "3": "第三區", "4": "第四區"
+            };
 
-            if (serviceId === 'DA01') {
-                if (selectedServices[serviceId] > 1) selectedServices[serviceId] = 1;
-            }
-
-            const qtySpan = document.getElementById(`qty-${serviceId}`);
-            if (qtySpan) {
-                const currentQty = selectedServices[serviceId];
-                qtySpan.value = currentQty;
-                if (currentQty > 0) {
-                    qtySpan.style.color = "blue";
-                    qtySpan.style.fontWeight = "bold";
-                } else {
-                    qtySpan.style.color = "";
-                    qtySpan.style.fontWeight = "";
-                }
-            }
-            calculateTotalExpenses();
+            return allQuotas.find(item => {
+                const matchLevel = (item.level == level || item.level === levelMapping[level]);
+                const matchArea = (item.area == area || item.area === areaMapping[area]);
+                return matchLevel && matchArea;
+            });
         }
 
-        function calculateTotalExpenses() {
-            let expenses = {
+        function getCareBudget(currentQuotaData) {
+            if (!currentQuotaData) return 0;
+
+            const rawQuota = currentQuotaData.First_package || 0;
+            return parseInt(String(rawQuota).replace(/,/g, ""), 10) || 0;
+        }
+
+        function parseMoneyValue(value) {
+            return parseInt(String(value || 0).replace(/,/g, ""), 10) || 0;
+        }
+
+        function getPackageCodeForServiceId(serviceId) {
+            const prefix = String(serviceId || "").substring(0, 1);
+
+            if (prefix === 'B' || prefix === 'C') {
+                return 'First_package';
+            }
+            if (prefix === 'D') {
+                return 'Second_package';
+            }
+            if (prefix === 'E' || prefix === 'F') {
+                return 'Third_package';
+            }
+            if (prefix === 'G') {
+                return 'Fourth_package';
+            }
+            return 'First_package';
+        }
+
+        function getServicePriceForId(serviceId, currentQuotaData) {
+            if (serviceId === 'DA01' && currentQuotaData) {
+                return parseMoneyValue(currentQuotaData.Second_package);
+            }
+
+            const service = allServices.find(s => s.ID === serviceId);
+            return service ? parseMoneyValue(service.unitPrice) : 0;
+        }
+
+        function getPackageBudget(currentQuotaData, packageCode) {
+            if (!currentQuotaData) return 0;
+            return parseMoneyValue(currentQuotaData[packageCode]);
+        }
+
+        function getPackageRemaining(currentQuotaData, packageCode, expenses) {
+            return Math.max(0, getPackageBudget(currentQuotaData, packageCode) - (expenses[packageCode] || 0));
+        }
+
+        function getSelectionExpenseSummary() {
+            const expenses = {
                 "First_package": 0,
                 "Second_package": 0,
                 "Third_package": 0,
                 "Fourth_package": 0
             };
 
+            let currentTotal = 0;
             const level = document.getElementById('level-select').value;
             const area = document.getElementById('area-select').value;
             const currentQuotaData = allQuotas.find(item => item.level === level && item.area === area);
 
             for (const [id, qty] of Object.entries(selectedServices)) {
-                if (qty <= 0) continue;
-                let price = 0;
-                if (id === 'DA01' && currentQuotaData) {
-                    price = parseInt(String(currentQuotaData.Second_package).replace(/,/g, ""), 10) || 0;
-                }
-                else {
-                    const service = allServices.find(s => s.ID === id);
-                    if (service) {
-                        price = parseInt(String(service.unitPrice).replace(/,/g, ""), 10) || 0;
-                    }
-                }
-                const subtotal = price * qty;
-                const prefix = id.substring(0, 1);
+                const parsedQty = parseInt(qty, 10) || 0;
+                if (parsedQty <= 0) continue;
 
+                const service = allServices.find(s => s.ID === id);
+                const price = (id === 'DA01' && currentQuotaData)
+                    ? parseMoneyValue(currentQuotaData.Second_package)
+                    : (service ? parseMoneyValue(service.unitPrice) : 0);
+
+                const subtotal = price * parsedQty;
+                currentTotal += subtotal;
+
+                const prefix = id.substring(0, 1);
                 if (prefix === 'B' || prefix === 'C') {
                     expenses["First_package"] += subtotal;
                 } else if (prefix === 'D') {
@@ -342,8 +434,94 @@
                     expenses["Fourth_package"] += subtotal;
                 }
             }
-            updateQuotaTableWithExpenses(expenses);
+
+            return { expenses, currentTotal, currentQuotaData };
+        }
+
+        function hasMutualExclusionConflict(serviceId, nextValue) {
+            const conflictGroup = ["BA01", "BA07", "BA23"];
+            if (nextValue <= 0 || !conflictGroup.includes(serviceId)) {
+                return false;
+            }
+
+            return conflictGroup.filter(id => id !== serviceId).some(id => selectedServices[id] > 0);
+        }
+
+        function syncServiceQuantityUI(serviceId, value) {
+            const cartInputEl = document.getElementById(`cart-qty-${serviceId}`);
+            if (cartInputEl) cartInputEl.value = value;
+
+            const inputEl = document.getElementById(`qty-${serviceId}`);
+            if (inputEl) {
+                inputEl.value = value;
+                if (value > 0) {
+                    inputEl.style.color = "blue";
+                    inputEl.style.fontWeight = "bold";
+                } else {
+                    inputEl.style.color = "";
+                    inputEl.style.fontWeight = "";
+                }
+            }
+        }
+
+        function revertServiceQuantityUI(serviceId) {
+            const currentVal = selectedServices[serviceId] || 0;
+            syncServiceQuantityUI(serviceId, currentVal);
+        }
+
+        function canApplyServiceQuantity(serviceId, nextValue) {
+            if (hasMutualExclusionConflict(serviceId, nextValue)) {
+                alert("錯誤：BA01、BA07 與 BA23 為互斥服務，不能同時選取！");
+                revertServiceQuantityUI(serviceId);
+                return false;
+            }
+
+            const currentQuotaData = getCurrentQuotaData();
+            const packageCode = getPackageCodeForServiceId(serviceId);
+            const packageBudget = getPackageBudget(currentQuotaData, packageCode);
+            const currentPrice = getServicePriceForId(serviceId, currentQuotaData);
+            const currentQty = selectedServices[serviceId] || 0;
+            const summary = getSelectionExpenseSummary();
+            const packageSpentWithoutThisService = (summary.expenses[packageCode] || 0) - (currentPrice * currentQty);
+            const nextPackageSpent = packageSpentWithoutThisService + (currentPrice * nextValue);
+
+            if (nextPackageSpent > packageBudget) {
+                revertServiceQuantityUI(serviceId);
+                return false;
+            }
+
+            return true;
+        }
+
+        function applyServiceQuantity(serviceId, value) {
+            let nextValue = parseInt(value, 10);
+            if (isNaN(nextValue) || nextValue < 0) nextValue = 0;
+            if (serviceId === 'DA01' && nextValue > 1) {
+                nextValue = 1;
+            }
+            if (!canApplyServiceQuantity(serviceId, nextValue)) {
+                return;
+            }
+
+            selectedServices[serviceId] = nextValue;
+            syncServiceQuantityUI(serviceId, nextValue);
+            calculateTotalExpenses();
+        }
+
+        function handleInputChange(serviceId, newValue) {
+            applyServiceQuantity(serviceId, newValue);
+        }
+
+        function updateQty(serviceId, change) {
+            const currentValue = selectedServices[serviceId] || 0;
+            applyServiceQuantity(serviceId, currentValue + change);
+        }
+
+        function calculateTotalExpenses() {
+            const summary = getSelectionExpenseSummary();
+            updateQuotaTableWithExpenses(summary.expenses);
             renderSelectedList();
+            loadServices();
         }
 
         function updateQuotaTableWithExpenses(expenses) {
@@ -405,26 +583,660 @@
                 const subtotal = price * qty;
 
                 return `
-                    <li style="margin-bottom: 8px; border-bottom: 1px dashed #ddd; padding-bottom: 5px;">
-                        <div style="display: flex; justify-content: space-between;">
-                            <strong>${id} ${name}</strong>
-                            <span style="color: blue; font-weight: bold;">x ${qty}</span>
+                    <li style="margin-bottom: 12px; border-bottom: 1px dashed #ddd; padding-bottom: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <strong style="font-size: 0.95em; max-width: 50%;">${id} ${name}</strong>
+                            
+                            <div style="display: flex; align-items: center; gap: 5px;">
+                                <button onclick="updateQty('${id}', -1)" style="padding: 2px 8px; border: 1px solid #ccc; background: #fff; cursor: pointer; border-radius: 3px;">-</button>
+                                
+                                <input 
+                                    type="number" 
+                                    id="cart-qty-${id}" 
+                                    value="${qty}" 
+                                    min="0"
+                                    onchange="handleInputChange('${id}', this.value)"
+                                    style="width: 40px; text-align: center; border: 1px solid #ccc; border-radius: 20px; color: blue; font-weight: bold; -webkit-appearance: none;"
+                                />
+                                
+                                <button onclick="updateQty('${id}', 1)" style="padding: 2px 8px; border: 1px solid #ccc; background: #fff; cursor: pointer; border-radius: 3px;">+</button>
+                            </div>
                         </div>
-                        <div style="font-size: 0.9em; color: #666; text-align: right;">
+                        <div style="font-size: 0.85em; color: #666; text-align: right; margin-top: 4px;">
                             小計：$${subtotal.toLocaleString()}
                         </div>
                     </li>
                 `;
             }).join('');
         }
-        
 
+        function getSelectedItemsForExport() {
+            const level = document.getElementById('level-select').value;
+            const area = document.getElementById('area-select').value;
+            const currentQuotaData = getCurrentQuotaData();
+
+            return Object.entries(selectedServices)
+                .filter(([, qty]) => qty > 0)
+                .map(([id, qty]) => {
+                    const service = allServices.find(s => s.ID === id);
+                    const name = service ? service.name : "未知項目";
+                    const packageCode = getPackageCodeForServiceId(id);
+                    const unitPrice = getServicePriceForId(id, currentQuotaData);
+                    const subtotal = unitPrice * qty;
+                    const packageBudget = getPackageBudget(currentQuotaData, packageCode);
+                    const summary = getSelectionExpenseSummary();
+                    const packageRemaining = getPackageRemaining(currentQuotaData, packageCode, summary.expenses);
+
+                    return {
+                        id,
+                        name,
+                        qty,
+                        unitPrice,
+                        subtotal,
+                        packageCode,
+                        packageBudget,
+                        packageRemaining,
+                    };
+                });
+        }
+
+        function buildExportModel() {
+            const level = document.getElementById('level-select').value;
+            const area = document.getElementById('area-select').value;
+            const currentQuotaData = getCurrentQuotaData();
+            const summary = getSelectionExpenseSummary();
+            const selectedItems = getSelectedItemsForExport();
+
+            const packageRows = [
+                { code: 'First_package', label: '一、照顧及專業服務' },
+                { code: 'Second_package', label: '二、交通接送服務' },
+                { code: 'Third_package', label: '三、輔具及無障礙環境改善服務' },
+                { code: 'Fourth_package', label: '四、家庭照顧者喘息服務' }
+            ].map(item => ({
+                ...item,
+                total: getPackageBudget(currentQuotaData, item.code),
+                used: summary.expenses[item.code] || 0,
+                remaining: getPackageRemaining(currentQuotaData, item.code, summary.expenses)
+            }));
+
+            return {
+                level,
+                area,
+                currentQuotaData,
+                summary,
+                selectedItems,
+                packageRows,
+                exportTime: new Date(),
+            };
+        }
+
+        function formatExportDate(date) {
+            return new Intl.DateTimeFormat('zh-Hant', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+            }).format(date);
+        }
+
+        function renderExportPreview(model) {
+            const preview = document.getElementById('export-preview');
+            const selectedRowsHtml = model.selectedItems.length > 0
+                ? model.selectedItems.map(item => `
+                    <tr>
+                        <td>${item.id}</td>
+                        <td>${item.name}</td>
+                        <td class="num">${item.qty.toLocaleString()}</td>
+                        <td class="num">$${item.unitPrice.toLocaleString()}</td>
+                        <td class="num">$${item.subtotal.toLocaleString()}</td>
+                    </tr>
+                `).join('')
+                : `
+                    <tr>
+                        <td colspan="5" style="text-align:center;color:#6b7280;">尚未選擇任何服務</td>
+                    </tr>
+                `;
+
+            const packageRowsHtml = model.packageRows.map(row => `
+                <tr>
+                    <td>${row.label}</td>
+                    <td class="num">$${row.total.toLocaleString()}</td>
+                    <td class="num">$${row.used.toLocaleString()}</td>
+                    <td class="num">$${row.remaining.toLocaleString()}</td>
+                </tr>
+            `).join('');
+
+            preview.innerHTML = `
+                <div class="export-sheet">
+                    <div class="export-header">
+                        <div>
+                            <h1>長照服務試算</h1>
+                            <div class="meta">輸出時間：${formatExportDate(model.exportTime)}</div>
+                        </div>
+                        <div class="meta">
+                            失能等級：${model.level}　居住地區：${model.area}<br>
+                            已選服務筆數：${model.selectedItems.length}
+                        </div>
+                    </div>
+
+                    <div class="export-stats">
+                        <div class="export-stat">
+                            <div class="label">總支出</div>
+                            <div class="value">$${model.summary.currentTotal.toLocaleString()}</div>
+                        </div>
+                        <div class="export-stat">
+                            <div class="label">全部服務總數量</div>
+                            <div class="value">${model.selectedItems.reduce((sum, item) => sum + item.qty, 0).toLocaleString()}</div>
+                        </div>
+                    </div>
+
+                    <div class="export-section-title">額度明細</div>
+                    <table class="export-table">
+                        <thead>
+                            <tr>
+                                <th>服務類別</th>
+                                <th class="num">總額度</th>
+                                <th class="num">已使用</th>
+                                <th class="num">剩餘</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${packageRowsHtml}
+                        </tbody>
+                    </table>
+
+                    <div class="export-section-title">已選服務</div>
+                    <table class="export-table">
+                        <thead>
+                            <tr>
+                                <th>代碼</th>
+                                <th>服務名稱</th>
+                                <th class="num">數量</th>
+                                <th class="num">單價</th>
+                                <th class="num">小計</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${selectedRowsHtml}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            return preview.querySelector('.export-sheet');
+        }
+
+        function downloadTextFile(filename, content) {
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        function buildPdfPageElement(model, page, pageIndex, totalPages) {
+            const preview = document.getElementById('export-preview');
+            const packageRowsHtml = model.packageRows.map(row => `
+                <tr>
+                    <td>${row.label}</td>
+                    <td class="num">$${row.total.toLocaleString()}</td>
+                    <td class="num">$${row.used.toLocaleString()}</td>
+                    <td class="num">$${row.remaining.toLocaleString()}</td>
+                </tr>
+            `).join('');
+
+            const selectedHeadersHtml = `
+                <thead>
+                    <tr>
+                        <th>代碼</th>
+                        <th>服務名稱</th>
+                        <th class="num">數量</th>
+                        <th class="num">單價</th>
+                        <th class="num">小計</th>
+                    </tr>
+                </thead>
+            `;
+
+            const rowList = page.rows;
+            const isPlaceholder = rowList.length === 1 && rowList[0].id === '' && rowList[0].name === '尚未選擇任何服務';
+            const selectedRowsHtml = isPlaceholder
+                ? `
+                    <tr>
+                        <td colspan="5" style="text-align:center;color:#6b7280;">尚未選擇任何服務</td>
+                    </tr>
+                `
+                : rowList.map(item => `
+                    <tr>
+                        <td>${item.id}</td>
+                        <td>${item.name}</td>
+                        <td class="num">${item.qty.toLocaleString()}</td>
+                        <td class="num">$${Number(item.unitPrice || 0).toLocaleString()}</td>
+                        <td class="num">$${Number(item.subtotal || 0).toLocaleString()}</td>
+                    </tr>
+                `).join('');
+
+            const pageEl = document.createElement('div');
+            pageEl.className = `export-page ${page.isFirst ? '' : 'export-page--continued'}`.trim();
+            pageEl.innerHTML = `
+                    <div class="export-page__inner">
+                        <div class="export-header">
+                            <div>
+                                <h1>長照服務試算輸出</h1>
+                                <div class="meta">輸出時間：${formatExportDate(model.exportTime)}</div>
+                            </div>
+                            <div class="meta">
+                                失能等級：${model.level}　居住地區：${model.area}<br>
+                                已選服務筆數：${model.selectedItems.length}
+                            </div>
+                        </div>
+
+                        ${page.isFirst ? `
+                            <div class="export-stats">
+                                <div class="export-stat">
+                                    <div class="label">總支出</div>
+                                    <div class="value">$${model.summary.currentTotal.toLocaleString()}</div>
+                                </div>
+                                <div class="export-stat">
+                                    <div class="label">全部服務總數量</div>
+                                    <div class="value">${model.selectedItems.reduce((sum, item) => sum + item.qty, 0).toLocaleString()}</div>
+                                </div>
+                            </div>
+
+                            <div class="export-section-title">額度明細</div>
+                            <table class="export-table">
+                                <thead>
+                                    <tr>
+                                        <th>服務類別</th>
+                                        <th class="num">總額度</th>
+                                        <th class="num">已使用</th>
+                                        <th class="num">剩餘</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${packageRowsHtml}
+                                </tbody>
+                            </table>
+                        ` : ''}
+
+                        <div class="export-section-title">已選服務</div>
+                        <table class="export-table">
+                            ${selectedHeadersHtml}
+                            <tbody>
+                                ${selectedRowsHtml}
+                            </tbody>
+                        </table>
+
+                        <div class="export-page-footer">第 ${pageIndex} 頁 / 共 ${totalPages} 頁</div>
+                    </div>
+                `;
+            return pageEl;
+        }
+
+        async function renderPdfPages(model) {
+            const preview = document.getElementById('export-preview');
+            preview.innerHTML = '';
+            preview.className = 'export-preview export-pages';
+
+            const rows = model.selectedItems.length > 0
+                ? model.selectedItems
+                : [{ id: '', name: '尚未選擇任何服務', qty: '', unitPrice: '', subtotal: '' }];
+
+            const pages = [];
+            let currentRows = [];
+            const heightLimit = 1123;
+
+            const measurePageHeight = async (pageData) => {
+                const tempPage = buildPdfPageElement(model, pageData, 1, 1);
+                tempPage.style.visibility = 'hidden';
+                tempPage.style.position = 'absolute';
+                tempPage.style.left = '0';
+                tempPage.style.top = '0';
+                preview.appendChild(tempPage);
+                await new Promise(resolve => requestAnimationFrame(() => resolve()));
+                const height = tempPage.scrollHeight;
+                tempPage.remove();
+                return height;
+            };
+
+            const finalizeCurrentPage = () => {
+                if (currentRows.length > 0) {
+                    pages.push({ isFirst: pages.length === 0, rows: [...currentRows] });
+                    currentRows = [];
+                }
+            };
+
+            for (const row of rows) {
+                currentRows.push(row);
+                const height = await measurePageHeight({ isFirst: pages.length === 0, rows: currentRows });
+
+                if (height > heightLimit && currentRows.length > 1) {
+                    currentRows.pop();
+                    finalizeCurrentPage();
+                    currentRows.push(row);
+                }
+            }
+
+            finalizeCurrentPage();
+
+            if (pages.length === 0) {
+                pages.push({ isFirst: true, rows });
+            }
+
+            preview.innerHTML = '';
+            const pageElements = pages.map((page, pageIndex) => buildPdfPageElement(model, page, pageIndex + 1, pages.length));
+            pageElements.forEach(pageEl => preview.appendChild(pageEl));
+            await new Promise(resolve => requestAnimationFrame(() => resolve()));
+
+            return pageElements;
+        }
+
+        function drawPdfFooter(pdf, pageNumber, totalPages) {
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            pdf.setFontSize(10);
+            pdf.setTextColor(102, 102, 102);
+            pdf.text(`第 ${pageNumber} 頁 / 共 ${totalPages} 頁`, pageWidth / 2, pageHeight - 18, { align: 'center' });
+        }
+
+        function addPdfSectionTitle(pdf, title, x, y) {
+            pdf.setFontSize(14);
+            pdf.setTextColor(17, 24, 39);
+            pdf.text(title, x, y);
+            return y + 8;
+        }
+
+        function addPdfKeyValue(pdf, label, value, x, y, valueWidth) {
+            pdf.setFontSize(11);
+            pdf.setTextColor(75, 85, 99);
+            pdf.text(label, x, y);
+            pdf.setTextColor(17, 24, 39);
+            pdf.text(value, x + valueWidth, y);
+        }
+
+        function drawPdfTableHeader(pdf, x, y, colWidths, headers) {
+            const rowHeight = 18;
+            pdf.setFillColor(239, 244, 251);
+            pdf.setDrawColor(219, 226, 234);
+            pdf.rect(x, y, colWidths.reduce((sum, width) => sum + width, 0), rowHeight, 'F');
+            pdf.setFontSize(11);
+            pdf.setTextColor(17, 24, 39);
+
+            let currentX = x;
+            headers.forEach((header, index) => {
+                pdf.rect(currentX, y, colWidths[index], rowHeight);
+                const textX = currentX + 4;
+                const textY = y + 12;
+                if (header.align === 'right') {
+                    pdf.text(header.label, currentX + colWidths[index] - 4, textY, { align: 'right' });
+                } else {
+                    pdf.text(header.label, textX, textY);
+                }
+                currentX += colWidths[index];
+            });
+
+            return y + rowHeight;
+        }
+
+        function renderPdfDocument(model) {
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
+
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            const marginX = 36;
+            const marginTop = 36;
+            const marginBottom = 32;
+            const usableWidth = pageWidth - marginX * 2;
+
+            const colWidths = [64, 230, 56, 72, 72];
+            const headers = [
+                { label: '代碼', align: 'left' },
+                { label: '服務名稱', align: 'left' },
+                { label: '數量', align: 'right' },
+                { label: '單價', align: 'right' },
+                { label: '小計', align: 'right' },
+            ];
+
+            const selectedRows = model.selectedItems.length > 0 ? model.selectedItems : [{ id: '', name: '尚未選擇任何服務', qty: '', unitPrice: '', subtotal: '' }];
+
+            let y = marginTop;
+            let currentPageTitle = '長照服務試算輸出';
+            let pageStarted = false;
+
+            const startNewPage = (withTableHeader = false) => {
+                if (pageStarted) {
+                    pdf.addPage();
+                } else {
+                    pageStarted = true;
+                }
+                y = marginTop;
+                pdf.setFont('helvetica', 'normal');
+                pdf.setTextColor(17, 24, 39);
+                pdf.setFontSize(20);
+                pdf.text(currentPageTitle, marginX, y);
+                y += 20;
+                pdf.setFontSize(11);
+                pdf.setTextColor(75, 85, 99);
+                pdf.text(`輸出時間：${formatExportDate(model.exportTime)}`, marginX, y);
+                pdf.text(`失能等級：${model.level}　居住地區：${model.area}`, marginX + 260, y);
+                y += 16;
+                pdf.text(`已選服務筆數：${model.selectedItems.length}`, marginX, y);
+                y += 16;
+                if (withTableHeader) {
+                    y += 2;
+                }
+            };
+
+            const renderSelectedTableHeader = () => {
+                y = addPdfSectionTitle(pdf, '已選服務', marginX, y + 14);
+                y = drawPdfTableHeader(pdf, marginX, y + 2, colWidths, headers);
+            };
+
+            const ensureSpace = (requiredHeight) => {
+                if (y + requiredHeight <= pageHeight - marginBottom) {
+                    return;
+                }
+                startNewPage();
+                renderSelectedTableHeader();
+            };
+
+            startNewPage(false);
+
+            y = addPdfSectionTitle(pdf, '額度明細', marginX, y + 6);
+            const packageRows = model.packageRows;
+            const packageTableWidth = [200, 110, 110, 110];
+            const packageHeaders = [
+                { label: '服務類別', align: 'left' },
+                { label: '總額度', align: 'right' },
+                { label: '已使用', align: 'right' },
+                { label: '剩餘', align: 'right' },
+            ];
+            y = drawPdfTableHeader(pdf, marginX, y + 2, packageTableWidth, packageHeaders);
+            packageRows.forEach(row => {
+                const rowHeight = 18;
+                pdf.rect(marginX, y, packageTableWidth.reduce((sum, width) => sum + width, 0), rowHeight);
+                let currentX = marginX;
+                const values = [row.label, `$${row.total.toLocaleString()}`, `$${row.used.toLocaleString()}`, `$${row.remaining.toLocaleString()}`];
+                values.forEach((value, index) => {
+                    pdf.rect(currentX, y, packageTableWidth[index], rowHeight);
+                    pdf.setFontSize(11);
+                    pdf.setTextColor(17, 24, 39);
+                    if (index === 0) {
+                        pdf.text(String(value), currentX + 4, y + 12);
+                    } else {
+                        pdf.text(String(value), currentX + packageTableWidth[index] - 4, y + 12, { align: 'right' });
+                    }
+                    currentX += packageTableWidth[index];
+                });
+                y += rowHeight;
+            });
+
+            renderSelectedTableHeader();
+
+            selectedRows.forEach((item, index) => {
+                const code = item.id || '';
+                const nameLines = pdf.splitTextToSize(String(item.name || ''), colWidths[1] - 8);
+                const rowHeight = Math.max(18, nameLines.length * 12 + 8);
+
+                ensureSpace(rowHeight, true);
+
+                const isPlaceholder = index === 0 && !item.id && item.name === '尚未選擇任何服務';
+                const rowValues = isPlaceholder
+                    ? ['', '尚未選擇任何服務', '', '', '']
+                    : [
+                        code,
+                        String(item.name || ''),
+                        String(item.qty ?? ''),
+                        `$${Number(item.unitPrice || 0).toLocaleString()}`,
+                        `$${Number(item.subtotal || 0).toLocaleString()}`,
+                    ];
+
+                let currentX = marginX;
+                const totalWidth = colWidths.reduce((sum, width) => sum + width, 0);
+                pdf.setDrawColor(219, 226, 234);
+                pdf.rect(marginX, y, totalWidth, rowHeight);
+
+                rowValues.forEach((value, colIndex) => {
+                    pdf.rect(currentX, y, colWidths[colIndex], rowHeight);
+                    pdf.setFontSize(11);
+                    pdf.setTextColor(17, 24, 39);
+
+                    if (colIndex === 1) {
+                        const textLines = isPlaceholder ? [String(value)] : nameLines;
+                        pdf.text(textLines, currentX + 4, y + 12, { baseline: 'top' });
+                    } else if (colIndex === 0) {
+                        pdf.text(String(value), currentX + 4, y + 12);
+                    } else {
+                        pdf.text(String(value), currentX + colWidths[colIndex] - 4, y + 12, { align: 'right' });
+                    }
+
+                    currentX += colWidths[colIndex];
+                });
+
+                y += rowHeight;
+            });
+
+            const totalPages = pdf.getNumberOfPages();
+            for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
+                pdf.setPage(pageNumber);
+                drawPdfFooter(pdf, pageNumber, totalPages);
+            }
+
+            return pdf;
+        }
+
+        function buildExportText(model) {
+            const lines = [];
+            lines.push('長照服務試算輸出');
+            lines.push(`輸出時間：${formatExportDate(model.exportTime)}`);
+            lines.push(`失能等級：${model.level}  居住地區：${model.area}`);
+            lines.push(`總支出：$${model.summary.currentTotal.toLocaleString()}`);
+            lines.push(`已選服務筆數：${model.selectedItems.length}`);
+            lines.push('');
+            lines.push('額度明細');
+            model.packageRows.forEach(row => {
+                lines.push(`${row.label}｜總額度 $${row.total.toLocaleString()}｜已使用 $${row.used.toLocaleString()}｜剩餘 $${row.remaining.toLocaleString()}`);
+            });
+            lines.push('');
+            lines.push('已選服務');
+            if (model.selectedItems.length === 0) {
+                lines.push('尚未選擇任何服務');
+            } else {
+                model.selectedItems.forEach(item => {
+                    lines.push(`${item.id} ${item.name}｜數量 ${item.qty}｜單價 $${item.unitPrice.toLocaleString()}｜小計 $${item.subtotal.toLocaleString()}`);
+                });
+            }
+            return lines.join('\n');
+        }
+
+        async function exportSelectedSummary() {
+            const format = document.getElementById('export-format-select').value;
+            const model = buildExportModel();
+
+            if (format === 'txt') {
+                downloadTextFile(`長照服務試算_${Date.now()}.txt`, buildExportText(model));
+                return;
+            }
+
+            const previewSheet = renderExportPreview(model);
+            await new Promise(resolve => requestAnimationFrame(() => resolve()));
+
+            const canvas = await html2canvas(previewSheet, {
+                scale: 2,
+                backgroundColor: '#ffffff',
+                useCORS: true,
+            });
+
+            if (format === 'jpg') {
+                const link = document.createElement('a');
+                link.download = `長照服務試算_${Date.now()}.jpg`;
+                link.href = canvas.toDataURL('image/jpeg', 0.95);
+                link.click();
+                return;
+            }
+
+            const pageElements = await renderPdfPages(model);
+
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+
+            for (let index = 0; index < pageElements.length; index += 1) {
+                const pageEl = pageElements[index];
+                const canvas = await html2canvas(pageEl, {
+                    scale: 2,
+                    backgroundColor: '#ffffff',
+                    useCORS: true,
+                });
+
+                if (index > 0) {
+                    pdf.addPage();
+                }
+
+                const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+            }
+
+            pdf.save(`長照服務試算_${Date.now()}.pdf`);
+        }
+      
         function resetAll() {
             if (confirm("確定要清空所有已選服務嗎？")) {
                 selectedServices = {};
                 loadServices();
                 calculateTotalExpenses();
             }
+        }
+
+        function getEstimatedTotal(servicesObj) {
+            const level = document.getElementById('level-select').value;
+            const area = document.getElementById('area-select').value;
+            const currentQuotaData = allQuotas.find(item => item.level === level && item.area === area);
+            console.log("getEstimatedTotal 服務物件：", servicesObj);
+            console.log("getEstimatedTotal 配額資料：", currentQuotaData);
+            
+            let total = 0;
+            for (const [id, qty] of Object.entries(servicesObj)) {
+                const parsedQty = parseInt(qty, 10) || 0;
+                if (parsedQty <= 0) continue;
+                const service = allServices.find(s => s.ID === id);
+                let price = 0;
+        
+                if (id === 'DA01' && currentQuotaData) {
+                    price = parseMoneyValue(currentQuotaData.Second_package);
+                } else if (service) {
+                    price = parseMoneyValue(service.unitPrice);
+                }
+                if (isNaN(price)) price = 0;
+                total += price * parsedQty;
+            }
+            return isNaN(total) ? 0 : total;
         }
 
         initServiceData();
