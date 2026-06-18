@@ -1,6 +1,6 @@
 // ai.js
 let lastAiResult = []; 
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_URL = `https://gemini-api-proxy.wudailing0826.workers.dev`;
 
 async function askAI() {
     const input = document.getElementById('ai-input').value;
