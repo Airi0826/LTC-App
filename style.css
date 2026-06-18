@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 body {
     font-family: sans-serif;
     display: flex;
@@ -187,3 +188,492 @@ select#area-select,
     background-color: white;
     box-shadow: 0 2px 5px rgba(0,0,0,0.05);
 }
+=======
+body {
+    font-family: sans-serif;
+    display: flex;
+    /* width: 100vh; */
+    height: 100vh; /* 填滿100%vh = Viewport Height */
+    margin: 0;
+    background-color: #f4f4f4;
+}
+
+.sidebar {
+    min-width: 250px;
+    max-width: 600px;
+    background: white;
+    padding: 0px 30px;
+    overflow-y: auto; /* 自動產生卷軸 */
+}
+
+.sidebar h2 {
+    margin: 30px 0px 15px;
+
+}
+
+.controls {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.controls #level {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.controls #area {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+
+.quota-table{
+    width: 100%;
+    padding: 20px 0px;
+}
+
+.quota-table th#num{
+    text-align: end;
+}
+
+.clear_button {
+    width: 90px;
+    height: 35px;
+    background-color: #ff4d4f;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.selected-list-section div{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.selected-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.export-format-select,
+.export_button {
+    height: 35px;
+    border-radius: 4px;
+    border: 1px solid #d9d9d9;
+}
+
+.export-format-select {
+    padding: 0 10px;
+    background: #fff;
+    color: #222;
+}
+
+.export_button {
+    min-width: 90px;
+    padding: 5px 12px;
+    background: linear-gradient(135deg, #1f6feb, #1249b7);
+    color: white;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+}
+
+.export-preview {
+    position: fixed;
+    left: -10000px;
+    top: 0;
+    width: 860px;
+    padding: 0;
+    background: #fff;
+    color: #111;
+    pointer-events: none;
+    z-index: -1;
+}
+
+.export-pages {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.export-page {
+    width: 794px;
+    height: 1123px;
+    box-sizing: border-box;
+    padding: 36px 40px 34px;
+    background: #fff;
+    color: #111;
+    overflow: hidden;
+}
+
+.export-page__inner {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.export-page-footer {
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid #dbe2ea;
+    text-align: center;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.export-page--continued .export-header h1::after {
+    content: "（續）";
+    font-size: 15px;
+    color: #6b7280;
+    margin-left: 6px;
+}
+
+.export-sheet {
+    width: 860px;
+    box-sizing: border-box;
+    padding: 28px 30px;
+    background: #fff;
+    font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+}
+
+.export-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+    padding-bottom: 16px;
+    margin-bottom: 16px;
+    border-bottom: 2px solid #111;
+}
+
+.export-header h1 {
+    margin: 0 0 6px 0;
+    font-size: 24px;
+}
+
+.export-header .meta {
+    color: #555;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.export-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin: 14px 0 18px;
+}
+
+.export-stat {
+    background: #f7f9fc;
+    border: 1px solid #e4e8f0;
+    border-radius: 12px;
+    padding: 12px 14px;
+}
+
+.export-stat .label {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.export-stat .value {
+    margin-top: 4px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #111827;
+}
+
+.export-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.export-table th,
+.export-table td {
+    border: 1px solid #dbe2ea;
+    padding: 8px 10px;
+    font-size: 13px;
+}
+
+.export-table th {
+    background: #eff4fb;
+    text-align: left;
+}
+
+.export-table td.num,
+.export-table th.num {
+    text-align: right;
+}
+
+.export-section-title {
+    margin: 18px 0 8px;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+
+/* ------------------------------- */
+
+.resizer {
+    width: 8px;              /* 分隔線寬度 */
+    background-color: #f1f1f1; /* 基礎顏色 */
+    cursor: col-resize;      /* 鼠標變成左右拖移箭頭 */
+    transition: background 0.2s;
+}
+/* 滑鼠懸停或拖移時變色，讓使用者知道可以互動 */
+.resizer:hover, .resizer:active {
+    background-color: #72aae6; /* 變成亮藍色，很有科技感 */
+}
+
+.main-content { /* 右邊整塊 */
+    flex: 1;
+    /* flex-basis: 65%; */
+    padding: 20px;
+    justify-content: space-around;
+    overflow-y: auto;
+}
+
+
+.ai-section {
+    padding: 15px;
+    background: #f0f7ff;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.ai-section p {
+    font-size: 0.9em;
+    color: #555;
+}
+
+.ai-section div input {
+    flex: 1;
+    width: 80%;
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+}
+
+.ai-section div button {
+    padding: 10px 20px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.ai-progress-container {
+    display: none; 
+    margin-top: 15px;
+}
+/* AI 狀態文字提示 */
+.ai-status-text {
+    font-size: 0.85em; 
+    color: #007bff; 
+    font-weight: bold; 
+    margin-bottom: 5px;
+}
+
+/* 進度條底槽 */
+.ai-progress-track {
+    width: 100%; 
+    background-color: #e0e0e0; 
+    border-radius: 4px; 
+    height: 8px; 
+    overflow: hidden;
+}
+
+/* 進度條填滿條（動態過渡效果） */
+.ai-progress-bar {
+    width: 0%; 
+    height: 100%; 
+    background-color: #007bff; 
+    transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+/* 狀態顏色類別 */
+.text-success { color: #28a745; }
+.text-error { color: #dc3545; }
+.bg-success { background-color: #28a745; }
+.bg-error { background-color: #dc3545; }
+/* AI 評估結果暫存區區塊 */
+.ai-cache-zone {
+    display: none; 
+    margin-top: 15px; 
+    padding: 10px; 
+    border: 1px dashed #007bff; 
+    border-radius: 5px; 
+    background-color: #f8f9fa;
+    display: flexbox;
+}
+/* 暫存區內部的分析結果文字樣式 */
+.ai-cache-result {
+    font-size: 0.85em;
+    color: #28a745; /* 綠色 */
+    font-weight: bold;
+    margin-bottom: 10px; /* 與下方按鈕保持間距 */
+}
+/* 暫存區內的需求文字描述 */
+.ai-cache-title {
+    margin: 0 0 8px 0; 
+    font-size: 0.9em; 
+    color: #333;
+}
+
+.ai-cache-text {
+    color: #555;
+}
+
+/* 一鍵套用按鈕樣式 */
+.ai-apply-btn {
+    font-size: 0.85em;
+    border: 1px solid #007bff;
+    background-color: transparent;
+    color: #007bff;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ai-apply-btn:hover {
+    background-color: #007bff;
+    color: #fff;
+}
+.service-grid { /* 服務項目外圈 */
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); 
+    gap: 15px;
+    padding: 10px;
+}
+
+.service-item { /* 服務項目 */
+    background-color: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    display: flex;
+    justify-content: space-between;
+}
+.card-controls-wrapper{
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+}
+.card-controls{
+    gap: 10px;
+    display: flex;
+    align-items: center;
+}
+
+.card-controls input {
+    width: 30px;
+    border: 1.5px solid #ccc;
+    border-radius: 12px;
+    text-align: center;
+    width: 40px;
+    font-size: 1rem;
+    outline: none;
+}
+/* 💡 隱藏 Chrome, Safari, Edge, Opera 的上下箭頭 */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* 💡 統一設定輸入框的樣式與圓角 */
+.ai-progress-container input[type="number"], /* 如果有特定外殼 */
+#selected-items-ul input[type="number"],     /* 左側購物車 */
+.card input[type="number"] {                 /* 右側卡片，請依妳的實際 class 調整 */
+    border-radius: 50px;                     /* 圓角大小，可依喜好調整 */
+    padding: 2px 5px;
+    outline: none;                           /* 點擊時不出現粗黑邊框 */
+}
+
+.qty-input::-webkit-outer-spin-button,
+.qty-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+    display: none;
+}
+
+.card-controls button { /* 服務項目內按鈕 */
+    width: 30px;
+    height: 30px;
+    font-size: 1rem; /* 根字體的大小倍數 */
+    touch-action: manipulation; /* 對操作友善 */
+    cursor: pointer;
+}
+
+.card-controls button:active{ /* 點擊讓按鈕縮小 */
+    transform: scale(0.92);
+}
+
+.tabs-row {
+    display: grid;
+    grid-template-columns: auto auto auto;
+    justify-content: space-between;
+    /* align-content: center; */
+}
+
+#category-main button {
+    width: 40vh;
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 12px;
+    font-size: 1rem;
+    padding: 15px 30px;
+    margin: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+#category-main button:active {
+    transform: scale(0.98);
+    background-color: #e7e7e7;
+}
+
+#category-sub button {
+    background-color: #ffffff;
+    color: #007bff;
+    border: 0.5px solid #007bff;
+    border-radius: 12px;
+    font-size: 1rem;
+    padding: 10px;
+    margin: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+#category-sub button:active {
+    transform: scale(0.95);
+    background-color: #e7f1ff;
+}
+
+select#level-select, 
+select#area-select,
+.subcategory-select {
+    font-size: 1.2rem;
+    padding: 12px 20px;
+    border-radius: 8px;
+    border: 1px solid #007bff;
+    width: 100%;
+    max-width: 300px;
+    cursor: pointer;
+    background-color: white;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+>>>>>>> 7475edf (Initial commit: 建立長照試算完整功能與 AI 機制)
